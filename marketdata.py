@@ -13,7 +13,12 @@ def _dividend_yield(ticker, symbol):
     try:
         y = ticker.info.get("dividendYield")
         if y:
-            return float(y)
+            y = float(y)
+            if y > 1.0:
+                # yfinance sometimes returns a percentage (e.g. 2.36)
+                # instead of a decimal (0.0236) -- normalize it
+                y /= 100.0
+            return y
     except Exception:
         pass
     return {"KO": 0.028}.get(symbol, 0.0)  # extend as you add symbols
