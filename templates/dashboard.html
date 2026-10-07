@@ -6,31 +6,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Short Put Dashboard</title>
   <style>
-    body { font-family: -apple-system, Helvetica, Arial, sans-serif;
-           background: #f4f4f5; color: #1c1c1e; margin: 0; padding: 16px; }
-    h1 { font-size: 22px; margin: 0 0 4px; }
-    .sub { color: #6b7280; font-size: 13px; margin-bottom: 16px; }
-    .card { background: #fff; border-radius: 12px; padding: 16px;
-            margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    .verdict { display: flex; align-items: center; gap: 10px;
-               font-size: 18px; font-weight: 700; margin-bottom: 10px; }
-    .dot { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; }
-    .green .dot { background: #22c55e; } .green .verdict { color: #15803d; }
-    .yellow .dot { background: #eab308; } .yellow .verdict { color: #a16207; }
-    .red .dot { background: #ef4444; } .red .verdict { color: #b91c1c; }
-    .nums { display: flex; flex-wrap: wrap; gap: 14px; font-size: 14px;
-            margin: 10px 0; }
-    .nums b { font-size: 16px; }
-    .pnl-pos { color: #15803d; } .pnl-neg { color: #b91c1c; }
-    .qa { border-top: 1px solid #eee; padding: 8px 0; font-size: 14px; }
-    .qa .q { font-weight: 600; }
-    .ok { color: #15803d; } .bad { color: #b91c1c; } .warn { color: #a16207; }
-    .bar { height: 14px; border-radius: 7px; background: #e5e7eb;
-           margin: 4px 0 10px; position: relative; overflow: hidden; }
-    .bar > div { height: 100%; border-radius: 7px; }
-    .lbl { font-size: 12px; color: #6b7280; }
-    .err { color: #b91c1c; }
-    footer { color: #9ca3af; font-size: 12px; margin-top: 8px; }
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif;
+         background: #111827; color: #e5e7eb; margin: 0; padding: 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: #9ca3af; font-size: 13px; margin-bottom: 16px; }
+  .card { background: #1f2937; border-radius: 12px; padding: 16px;
+          margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .verdict { display: flex; align-items: center; gap: 10px;
+             font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+  .dot { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; }
+  .green .dot { background: #22c55e; } .green .verdict { color: #4ade80; }
+  .yellow .dot { background: #eab308; } .yellow .verdict { color: #facc15; }
+  .red .dot { background: #ef4444; } .red .verdict { color: #f87171; }
+  .nums { display: flex; flex-wrap: wrap; gap: 14px; font-size: 14px;
+          margin: 10px 0; }
+  .nums b { font-size: 16px; }
+  .pnl-pos { color: #4ade80; } .pnl-neg { color: #f87171; }
+  .qa { border-top: 1px solid #374151; padding: 8px 0; font-size: 14px; }
+  .qa .q { font-weight: 600; }
+  .ok { color: #4ade80; } .bad { color: #f87171; } .warn { color: #facc15; }
+  .bar { height: 14px; border-radius: 7px; background: #374151;
+         margin: 4px 0 10px; position: relative; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 7px; }
+  .lbl { font-size: 12px; color: #9ca3af; }
+  .err { color: #f87171; }
+  footer { color: #6b7280; font-size: 12px; margin-top: 8px; }
   </style>
 </head>
 <body>
