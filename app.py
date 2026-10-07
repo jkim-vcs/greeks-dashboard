@@ -10,8 +10,9 @@ One route: fetch live data -> do the Greek math -> render the verdict.
 """
 from datetime import datetime, timezone
 
-from flask import Flask, render_template
-
+from flask import Flask, redirect, render_template, request, url_for
+import json
+import os
 import greeks
 import marketdata
 
@@ -20,53 +21,104 @@ app = Flask(__name__)
 RISK_FREE_RATE = 0.04  # 4% — close enough for short-dated options
 
 # ---------------------------------------------------------------------------
-# YOUR POSITIONS — this is the file you edit as trades change.
-# qty is negative for short. profit_target = your 50% rule buyback level.
-# kind is "put" or "call" (default "put").
+# POSITIONS come from the trade log (trades.json): each STO opens a dashboard
+# position, each BTC closes (part of) it. The 50% rule target is automatic.
 # ---------------------------------------------------------------------------
-POSITIONS = [
-    {
-        "label": "KO Oct 23 $84 puts",
-        "symbol": "KO",
-        "expiry": "2026-10-23",   # YYYY-MM-DD; must be close to a listed expiry
-        "strike": 84.0,
-        "kind": "put",
-        "qty": -2,                # short 2 contracts
-        "sold": 0.55,             # credit received per share
-        "profit_target": 0.27,    # 50% rule: buy back at half the credit
-    },
-    {
-        "label": "BE Nov 22 $230 puts",
-        "symbol": "BE",
-        "expiry": "2026-11-20",   # YYYY-MM-DD; must be close to a listed expiry
-        "strike": 230.0,
-        "qty": -1,                # short 2 contracts
-        "sold": 7.85,             # filled price
-        "profit_target": 4,    # 50% rule: buy back at half the credit
-    },
-    # Add your next short put by copying the block above, e.g.:
-    # {
-    #     "label": "BE Oct 23 $205 put",
-    #     "symbol": "BE",
-    #     "expiry": "2026-10-23",
-    #     "strike": 205.0,
-    #     "kind": "put",
-    #     "qty": -1,
-    #     "sold": 2.50,
-    #     "profit_target": 1.25,
-    # },
-    # A short call looks the same, with kind = "call":
-    # {
-    #     "label": "KO Nov 13 $94 calls",
-    #     "symbol": "KO",
-    #     "expiry": "2026-11-13",
-    #     "strike": 94.0,
-    #     "kind": "call",
-    #     "qty": -2,
-    #     "sold": 0.40,
-    #     "profit_target": 0.20,
-    # },
-]
+def open_positions():
+    """Build dashboard positions from unclosed STO lots in the trade log."""
+    lots = []  # [key, remaining qty, price]
+    for t in load_trades():
+        key = (t["symbol"], t["expiry"], float(t["strike"]), t["kind"])
+        if t["action"] == "STO":
+            lots.append([key, t["qty"], t["price"]])
+        else:  # BTC closes oldest matching lots first
+            need = t["qty"]
+            for lot in lots:
+                if need <= 0 or lot[1] <= 0 or lot[0] != key:
+                    continue
+                m = min(need, lot[1])
+                lot[1] -= m
+                need -= m
+    groups = {}
+    for key, qty, price in lots:
+        if qty <= 0:
+            continue
+        g = groups.setdefault(key, {"qty": 0, "cost": 0.0})
+        g["qty"] += qty
+        g["cost"] += qty * price
+    positions = []
+    for (symbol, expiry, strike, kind), g in groups.items():
+        avg = g["cost"] / g["qty"]
+        exp = datetime.strptime(expiry, "%Y-%m-%d")
+        positions.append({
+            "label": "%s %s %d $%g %ss" % (symbol, exp.strftime("%b"), exp.day, strike, kind),
+            "symbol": symbol,
+            "expiry": expiry,
+            "strike": strike,
+            "kind": kind,
+            "qty": -g["qty"],              # negative = short
+            "sold": round(avg, 4),         # weighted-average credit
+            "profit_target": round(avg * 0.5, 2),  # 50% rule, automatic
+        })
+    return positions
+
+
+# ---------------------------------------------------------------------------
+# TRADE LOG — STO/BTC entries stored in trades.json (git-ignored: personal data).
+# ---------------------------------------------------------------------------
+TRADES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trades.json")
+
+
+def load_trades():
+    try:
+        with open(TRADES_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def save_trades(trades):
+    with open(TRADES_FILE, "w") as f:
+        json.dump(trades, f, indent=2)
+
+
+def with_pnl(trades):
+    """Attach realized P&L to each BTC by FIFO-matching against open STO lots.
+
+    Each BTC row also gets t["closes"]: the STO lots it closed, so the log
+    can show the link (qty @ price + STO date). t["unmatched"] is BTC qty
+    with no matching STO.
+    """
+    open_lots = []
+    out = []
+    for t in trades:
+        t["_id"] = len(out)  # stable row id, survives the date sort
+
+        key = (t["symbol"], t["expiry"], float(t["strike"]), t["kind"])
+        if t["action"] == "STO":
+            open_lots.append({"key": key, "qty": t["qty"], "price": t["price"],
+                              "date": t["date"], "id": t["_id"]})
+            t["pnl"], t["pnl_cls"] = None, ""
+            t["closes"], t["unmatched"] = [], 0
+        else:
+            need, realized = t["qty"], 0.0
+            closes = []
+            for lot in open_lots:
+                if need <= 0 or lot["qty"] <= 0 or lot["key"] != key:
+                    continue
+                m = min(need, lot["qty"])
+                realized += (lot["price"] - t["price"]) * m * 100
+                lot["qty"] -= m
+                need -= m
+                closes.append({"qty": m, "price": lot["price"],
+                               "date": lot["date"], "id": lot["id"]})
+            if need < t["qty"]:
+                t["pnl"], t["pnl_cls"] = round(realized, 2), "pos" if realized >= 0 else "neg"
+            else:
+                t["pnl"], t["pnl_cls"] = None, ""
+            t["closes"], t["unmatched"] = closes, need
+        out.append(t)
+    return out
 
 
 def analyze(pos):
@@ -151,13 +203,56 @@ def analyze(pos):
 @app.route("/")
 def dashboard():
     cards = []
-    for pos in POSITIONS:
+    for pos in open_positions():
         try:
             cards.append(analyze(pos))
         except Exception as e:  # one bad symbol shouldn't kill the page
             cards.append({"label": pos["label"], "error": str(e)})
     return render_template("dashboard.html", cards=cards,
+                           today=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
                            now=datetime.now(timezone.utc).strftime("%H:%M UTC"))
+
+
+@app.route("/log", methods=["GET", "POST"])
+def trade_log():
+    """Log STO/BTC trades; BTC rows show realized P&L matched FIFO to STOs."""
+    if request.method == "POST":
+        try:
+            entry = {
+                "date": request.form["date"],
+                "action": request.form["action"],
+                "symbol": request.form["symbol"].strip().upper(),
+                "expiry": request.form["expiry"],
+                "strike": float(request.form["strike"]),
+                "kind": request.form["kind"],
+                "qty": int(request.form["qty"]),
+                "price": float(request.form["price"]),
+                "notes": request.form.get("notes", "").strip(),
+            }
+        except (KeyError, ValueError):
+            return "Missing or invalid field — go back and fix the form.", 400
+        if not entry["date"] or not entry["symbol"] or not entry["expiry"]:
+            return "Date, symbol and expiry are required.", 400
+        if entry["action"] not in ("STO", "BTC") or entry["kind"] not in ("put", "call"):
+            return "Action must be STO/BTC and type put/call.", 400
+        if entry["qty"] <= 0 or entry["price"] < 0:
+            return "Qty must be positive and price can't be negative.", 400
+        trades = load_trades()
+        trades.append(entry)
+        save_trades(trades)
+        return redirect(url_for("dashboard"))
+    trades = with_pnl(load_trades())
+    # newest date first; later-entered rows first on same date
+    trades = [t for _, t in sorted(enumerate(trades),
+                                key=lambda p: (p[1]["date"], p[0]),
+                                reverse=True)]
+    total = round(sum(t["pnl"] for t in trades if t["pnl"] is not None), 2)
+    n_sto = sum(1 for t in trades if t["action"] == "STO")
+    n_btc = sum(1 for t in trades if t["action"] == "BTC")
+    return render_template(
+        "log.html", trades=trades, total=total, n_sto=n_sto, n_btc=n_btc,
+        today=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+    )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trade Log — Options Dashboard</title>
+  <style>
+    body { font-family: -apple-system, Helvetica, Arial, sans-serif;
+           background: #111827; color: #e5e7eb; margin: 0; padding: 16px; }
+    h1 { font-size: 26px; margin: 0 0 4px; }
+    .sub { color: #9ca3af; font-size: 15px; margin-bottom: 16px; }
+    .sub b { font-size: 17px; }
+    a { color: #60a5fa; text-decoration: none; }
+    .card { background: #1f2937; border-radius: 12px; padding: 16px;
+            margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+    table { width: 100%; border-collapse: collapse; font-size: 16px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #374151; }
+    th { color: #9ca3af; font-size: 14px; }
+    td.notes { max-width: 200px; overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap; }
+    .closes { font-size: 12px; color: #9ca3af; white-space: nowrap; }
+            .sto { color: #f87171; font-weight: 700; }
+            .btc { color: #4ade80; font-weight: 700; }
+    tr[data-closes]:hover td { background: #2a3648; cursor: default; }
+    tr.linked td { background: #374151; }
+    .pos { color: #4ade80; } .neg { color: #f87171; }
+    .empty { color: #6b7280; padding: 12px 0; }
+  </style>
+</head>
+<body>
+  <h1>📒 Trade Log</h1>
+    <div class="sub"><a href="/">← Dashboard</a> ·
+    {{ n_sto + n_btc }} trades ({{ n_sto }} STO · {{ n_btc }} BTC) ·
+    Total realized P&amp;L: <b class="{{ 'pos' if total >= 0 else 'neg' }}">${{ total }}</b></div>
+  <div class="card">
+    {% if trades %}
+    <table>
+      <tr><th>Date</th><th></th><th>Symbol</th><th>Expiry</th><th>Strike</th><th>P/C</th>
+          <th>Qty</th><th>Price</th><th>P&amp;L</th><th>Notes</th></tr>
+      {% for t in trades %}
+      <tr id="t{{ t._id }}"{% if t.closes %} data-closes="{% for c in t.closes %}{{ c.id }}{% if not loop.last %},{% endif %}{% endfor %}"{% endif %}>
+        <td>{{ t.date }}</td>
+        <td class="{{ 'sto' if t.action == 'STO' else 'btc' }}">{{ t.action }}</td>
+        <td>{{ t.symbol }}</td>
+        <td>{{ t.expiry }}</td>
+        <td>{{ t.strike }}</td>
+        <td>{{ t.kind }}</td>
+        <td>{{ t.qty }}</td>
+        <td>${{ t.price }}</td>
+        <td class="{{ t.pnl_cls }}">{{ "$%.2f"|format(t.pnl) if t.pnl is not none else "—" }}{% if t.closes %}<div class="closes">← {% for c in t.closes %}{{ c.qty }}× @ ${{ c.price }} ({{ c.date }}){% if not loop.last %}, {% endif %}{% endfor %}{% if t.unmatched %} · {{ t.unmatched }}× unmatched{% endif %}</div>{% endif %}</td>
+        <td class="notes" title="{{ t.notes }}">{{ t.notes }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <div class="empty">No trades logged yet — your STO/BTC history will appear here.</div>
+    {% endif %}
+  </div>
+<script>
+  // Hover a BTC row -> highlight the STO row(s) it closed.
+  document.querySelectorAll('tr[data-closes]').forEach(function (btc) {
+    var ids = btc.getAttribute('data-closes').split(',').filter(Boolean);
+    btc.addEventListener('mouseenter', function () {
+      ids.forEach(function (i) {
+        var el = document.getElementById('t' + i);
+        if (el) el.classList.add('linked');
+      });
+    });
+    btc.addEventListener('mouseleave', function () {
+      ids.forEach(function (i) {
+        var el = document.getElementById('t' + i);
+        if (el) el.classList.remove('linked');
+      });
+    });
+  });
+</script>
+</body>
+</html>
