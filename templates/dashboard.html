@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="180">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Short Put Dashboard</title>
+  <style>
+    body { font-family: -apple-system, Helvetica, Arial, sans-serif;
+           background: #f4f4f5; color: #1c1c1e; margin: 0; padding: 16px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    .sub { color: #6b7280; font-size: 13px; margin-bottom: 16px; }
+    .card { background: #fff; border-radius: 12px; padding: 16px;
+            margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .verdict { display: flex; align-items: center; gap: 10px;
+               font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+    .dot { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; }
+    .green .dot { background: #22c55e; } .green .verdict { color: #15803d; }
+    .yellow .dot { background: #eab308; } .yellow .verdict { color: #a16207; }
+    .red .dot { background: #ef4444; } .red .verdict { color: #b91c1c; }
+    .nums { display: flex; flex-wrap: wrap; gap: 14px; font-size: 14px;
+            margin: 10px 0; }
+    .nums b { font-size: 16px; }
+    .pnl-pos { color: #15803d; } .pnl-neg { color: #b91c1c; }
+    .qa { border-top: 1px solid #eee; padding: 8px 0; font-size: 14px; }
+    .qa .q { font-weight: 600; }
+    .ok { color: #15803d; } .bad { color: #b91c1c; } .warn { color: #a16207; }
+    .bar { height: 14px; border-radius: 7px; background: #e5e7eb;
+           margin: 4px 0 10px; position: relative; overflow: hidden; }
+    .bar > div { height: 100%; border-radius: 7px; }
+    .lbl { font-size: 12px; color: #6b7280; }
+    .err { color: #b91c1c; }
+    footer { color: #9ca3af; font-size: 12px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>🎯 Short Put Dashboard</h1>
+  <div class="sub">Auto-refreshes every 3 min · quotes ~15 min delayed · {{ now }}</div>
+
+  {% for c in cards %}
+  <div class="card {{ c.color if c.color else '' }}">
+    {% if c.error %}
+      <div class="verdict">⚠️ {{ c.label }}</div>
+      <div class="err">Couldn't load data: {{ c.error }}</div>
+    {% else %}
+      <div class="verdict"><span class="dot"></span>{{ c.verdict }}</div>
+      <div style="font-size:15px; font-weight:600">{{ c.label }} — short {{ c.qty }}x</div>
+      <div class="nums">
+        <span>KO <b>${{ c.underlying }}</b></span>
+        <span>Mark <b>${{ c.mark }}</b></span>
+        <span>P&amp;L <b class="{{ 'pnl-pos' if c.pnl >= 0 else 'pnl-neg' }}">${{ c.pnl }}</b></span>
+        <span>Sold ${{ c.sold }} → target ${{ c.target }}</span>
+        <span>{{ c.days_left }} days left · IV {{ c.iv }}%</span>
+      </div>
+      <div class="lbl">💰 Paycheck ${{ c.theta_day }}/day vs ~${{ c.swing_day }} daily swing</div>
+      <div class="bar">
+        <div style="width: {{ [c.theta_day / (c.swing_day or 1) * 100, 100] | min }}%; background:#22c55e"></div>
+      </div>
+      {% for a in c.answers %}
+      <div class="qa">
+        <span class="q">{{ a.q }}</span><br>
+        <span class="{{ 'ok' if a.ok and not a.get('warn') else ('warn' if a.get('warn') else 'bad') }}">{{ a.a }}</span>
+      </div>
+      {% endfor %}
+      <div class="lbl">Δ {{ c.delta }} · Γ {{ c.gamma }} · θ ${{ c.theta_day }}/day · as of {{ c.as_of }}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <footer>Educational tool — not financial advice. Data via Yahoo Finance.</footer>
+</body>
+</html>
