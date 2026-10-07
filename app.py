@@ -109,13 +109,20 @@ def analyze(pos):
         zone, good, bad = "OK — %.2f" % delta, True, False
     answers.append({"q": "2. Delta under 0.35?", "a": zone,
                     "ok": good, "warn": (not good) or (delta >= 0.30 and not bad)})
-    # Q3 — paycheck vs danger?
+    # Q3 — paycheck vs danger? (pay_pct = paycheck as % of typical daily swing)
+    pay_pct = (theta_day / swing_day * 100) if swing_day else 0
     healthy = theta_day >= 0.30 * swing_day
     answers.append({
-        "q": "3. Paycheck healthy? ($%.2f/day vs ~$%.0f swing)" % (theta_day, swing_day),
+        "q": "3. Paycheck healthy? ($%.2f/day vs ~$%.0f swing, %.0f%%)" % (theta_day, swing_day, pay_pct),
         "a": "Yes — worth holding" if healthy else "Thin — risk outweighs pay",
         "ok": healthy,
     })
+
+    # Progress toward max profit: captured P&L as % of the premium collected.
+    # 100% = the option expires worthless and you keep it all.
+    # (Your 50% rule = close when this bar reaches ~50%.)
+    max_profit = pos["sold"] * n * 100
+    profit_pct = max(0.0, min(1.0, pnl / max_profit)) * 100 if max_profit > 0 else 0.0
 
     if hit:
         verdict, color = "TAKE PROFIT — close it", "green"
@@ -136,6 +143,8 @@ def analyze(pos):
         "days_left": max(int(snap["T_years"] * 365), 0),
         "answers": answers, "verdict": verdict, "color": color,
         "as_of": snap["as_of"],
+        "max_profit": round(max_profit, 2),
+        "profit_pct": round(profit_pct, 1),
     }
 
 

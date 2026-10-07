@@ -46,16 +46,16 @@
       <div class="verdict"><span class="dot"></span>{{ c.verdict }}</div>
       <div style="font-size:15px; font-weight:600">{{ c.label }} — short {{ c.qty }}x</div>
       <div class="nums">
-        <span>KO <b>${{ c.underlying }}</b></span>
+        <span>{{ c.symbol }} <b>${{ c.underlying }}</b></span>
         <span>Mark <b>${{ c.mark }}</b></span>
         <span>P&amp;L <b class="{{ 'pnl-pos' if c.pnl >= 0 else 'pnl-neg' }}">${{ c.pnl }}</b></span>
         <span>Sold ${{ c.sold }} → target ${{ c.target }}</span>
         <span>{{ c.days_left }} days left · IV {{ c.iv }}%</span>
       </div>
-      <div class="lbl">💰 Paycheck ${{ c.theta_day }}/day vs ~${{ c.swing_day }} daily swing</div>
-      <div class="bar">
-        <div style="width: {{ [c.theta_day / (c.swing_day or 1) * 100, 100] | min }}%; background:#22c55e"></div>
-      </div>
+        <div class="lbl">🎯 {{ c.profit_pct }}% of max profit (${{ c.pnl }} of ${{ c.max_profit }})</div>
+        <div class="bar">
+          <div style="width: {{ c.profit_pct }}%; background:#22c55e"></div>
+        </div>
       {% for a in c.answers %}
       <div class="qa">
         <span class="q">{{ a.q }}</span><br>
