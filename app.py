@@ -58,7 +58,7 @@ def open_positions():
             "kind": kind,
             "qty": -g["qty"],              # negative = short
             "sold": round(avg, 4),         # weighted-average credit
-            "profit_target": round(avg * 0.5, 2),  # 50% rule, automatic
+            "label": "%s %s %d $%g %s" % (symbol, exp.strftime("%b"), exp.day, strike, kind.upper() + "S"),
         })
     return positions
 
@@ -146,6 +146,7 @@ def analyze(pos):
 
     answers = []
     # Q1 — profit target?
+    pos.setdefault("profit_target", round(pos["sold"] * 0.5, 2))  # tolerate dicts without it
     hit = mark <= pos["profit_target"]
     answers.append({
         "q": "1. Buyback at or below $%.2f?" % pos["profit_target"],
