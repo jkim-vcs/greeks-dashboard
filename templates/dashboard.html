@@ -46,8 +46,7 @@
 </head>
 <body>
   <h1>🎯 Options Dashboard</h1>
-  <div class="sub">Auto-refreshes every 3 min · quotes ~15 min delayed · {{ now }} · <a href="/log">📒 Trade Log</a></div>
-
+  <div class="sub">Auto-refreshes every 3 min (<span id="cd">3:00</span>) · quotes ~15 min delayed · {{ now }} · <a href="/log">📒 Trade Log</a></div>
   <div class="card">
     <form method="post" action="/log">
       <label>Date<input type="date" name="date" value="{{ today }}" required></label>
@@ -110,5 +109,15 @@
   {% endif %}
 
   <footer>Educational tool — not financial advice. Data via Yahoo Finance.</footer>
+<script>
+  // Countdown to the next auto-refresh (matches the 180s meta refresh).
+  var remain = 180;
+  var el = document.getElementById('cd');
+  setInterval(function () {
+    if (remain > 0) remain -= 1;
+    var m = Math.floor(remain / 60), s = remain % 60;
+    el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  }, 1000);
+</script>
 </body>
 </html>
