@@ -8,11 +8,12 @@ Open:
 
 One route: fetch live data -> do the Greek math -> render the verdict.
 """
+import json
+import os
 from datetime import datetime, timezone
 
 from flask import Flask, redirect, render_template, request, url_for
-import json
-import os
+
 import greeks
 import marketdata
 
@@ -46,19 +47,23 @@ def open_positions():
         g = groups.setdefault(key, {"qty": 0, "cost": 0.0})
         g["qty"] += qty
         g["cost"] += qty * price
+    limits = load_limits()
     positions = []
     for (symbol, expiry, strike, kind), g in groups.items():
         avg = g["cost"] / g["qty"]
         exp = datetime.strptime(expiry, "%Y-%m-%d")
+        pkey = position_key(symbol, expiry, strike, kind)
         positions.append({
-            "label": "%s %s %d $%g %ss" % (symbol, exp.strftime("%b"), exp.day, strike, kind),
+            "label": "%s %s %d $%g %s" % (symbol, exp.strftime("%b"), exp.day, strike, kind.capitalize()),
             "symbol": symbol,
             "expiry": expiry,
             "strike": strike,
             "kind": kind,
             "qty": -g["qty"],              # negative = short
             "sold": round(avg, 4),         # weighted-average credit
-            "label": "%s %s %d $%g %s" % (symbol, exp.strftime("%b"), exp.day, strike, kind.upper() + "S"),
+            "profit_target": round(avg * 0.5, 2),  # 50% rule, automatic
+            "key": pkey,
+            "buy_limit": limits.get(pkey),  # resting buy order, or None
         })
     return positions
 
@@ -82,6 +87,31 @@ def save_trades(trades):
         json.dump(trades, f, indent=2)
 
 
+# ---------------------------------------------------------------------------
+# RESTING BUY LIMITS — John's actual working buyback orders, marked by dragging
+# the amber tick on a card's profit bar. Keyed "SYM|expiry|strike|kind".
+# Stored in limits.json (git-ignored: personal data), like trades.json.
+# ---------------------------------------------------------------------------
+LIMITS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "limits.json")
+
+
+def load_limits():
+    try:
+        with open(LIMITS_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_limits(limits):
+    with open(LIMITS_FILE, "w") as f:
+        json.dump(limits, f, indent=2)
+
+
+def position_key(symbol, expiry, strike, kind):
+    return "%s|%s|%s|%s" % (symbol, expiry, strike, kind)
+
+
 def with_pnl(trades):
     """Attach realized P&L to each BTC by FIFO-matching against open STO lots.
 
@@ -92,8 +122,8 @@ def with_pnl(trades):
     open_lots = []
     out = []
     for t in trades:
+        t = dict(t)
         t["_id"] = len(out)  # stable row id, survives the date sort
-
         key = (t["symbol"], t["expiry"], float(t["strike"]), t["kind"])
         if t["action"] == "STO":
             open_lots.append({"key": key, "qty": t["qty"], "price": t["price"],
@@ -178,26 +208,33 @@ def analyze(pos):
     profit_pct = max(0.0, min(1.0, pnl / max_profit)) * 100 if max_profit > 0 else 0.0
 
     if hit:
-        verdict, color = "TAKE PROFIT — close it", "green"
+        verdict, color = "TAKE PROFIT — Close it", "green"
     elif delta >= 0.35:
-        verdict, color = "EXIT — trade broke, roll or close", "red"
+        verdict, color = "EXIT — Trade broke, roll or close", "red"
     elif delta >= 0.30 or not healthy:
-        verdict, color = "WATCH — hold, but eyes open", "yellow"
+        verdict, color = "WATCH — Hold, but eyes open", "yellow"
     else:
-        verdict, color = "HOLD — theta is paying you", "green"
+        verdict, color = "HOLD — Theta is paying you", "green"
+
+    # Resting buy-order tick position (None = no order marked).
+    buy_limit = pos.get("buy_limit")
+    limit_pct = None
+    if buy_limit is not None and pos["sold"] > 0:
+        limit_pct = max(0.0, min(100.0, (pos["sold"] - buy_limit) / pos["sold"] * 100))
 
     return {
         "label": pos["label"], "symbol": pos["symbol"],
         "qty": n, "sold": pos["sold"], "target": pos["profit_target"],
+        "key": pos["key"], "buy_limit": buy_limit, "limit_pct": limit_pct,
         "underlying": snap["underlying"], "mark": mark, "pnl": round(pnl, 2),
         "delta": round(delta, 4), "theta_day": round(theta_day, 2),
         "gamma": round(g["gamma"], 4), "iv": round(snap["iv"] * 100, 2),
         "swing_day": round(swing_day, 2),
+        "max_profit": round(max_profit, 2),
+        "profit_pct": round(profit_pct, 1),
         "days_left": max(int(snap["T_years"] * 365), 0),
         "answers": answers, "verdict": verdict, "color": color,
         "as_of": snap["as_of"],
-        "max_profit": round(max_profit, 2),
-        "profit_pct": round(profit_pct, 1),
     }
 
 
@@ -210,8 +247,29 @@ def dashboard():
         except Exception as e:  # one bad symbol shouldn't kill the page
             cards.append({"label": pos["label"], "error": str(e)})
     return render_template("dashboard.html", cards=cards,
-                           today=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                           now=datetime.now(timezone.utc).strftime("%H:%M UTC"))
+                           now=datetime.now(timezone.utc).strftime("%H:%M UTC"),
+                           today=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+
+
+@app.route("/limit", methods=["POST"])
+def set_limit():
+    """Save or clear a resting buy limit for a position (from the bar tick)."""
+    data = request.get_json(force=True, silent=True) or {}
+    key = data.get("key", "")
+    price = data.get("price")
+    limits = load_limits()
+    if price is None:
+        limits.pop(key, None)
+    else:
+        try:
+            price = round(float(price), 2)
+        except (TypeError, ValueError):
+            return "Invalid price.", 400
+        if price < 0:
+            return "Price can't be negative.", 400
+        limits[key] = price
+    save_limits(limits)
+    return "OK"
 
 
 @app.route("/log", methods=["GET", "POST"])
@@ -245,8 +303,8 @@ def trade_log():
     trades = with_pnl(load_trades())
     # newest date first; later-entered rows first on same date
     trades = [t for _, t in sorted(enumerate(trades),
-                                key=lambda p: (p[1]["date"], p[0]),
-                                reverse=True)]
+                                   key=lambda p: (p[1]["date"], p[0]),
+                                   reverse=True)]
     total = round(sum(t["pnl"] for t in trades if t["pnl"] is not None), 2)
     n_sto = sum(1 for t in trades if t["action"] == "STO")
     n_btc = sum(1 for t in trades if t["action"] == "BTC")

@@ -8,46 +8,59 @@
   <style>
     body { font-family: -apple-system, Helvetica, Arial, sans-serif;
            background: #111827; color: #e5e7eb; margin: 0; padding: 16px; }
-    h1 { font-size: 22px; margin: 0 0 4px; }
-    .sub { color: #9ca3af; font-size: 13px; margin-bottom: 16px; }
+    h1 { font-size: 26px; margin: 0 0 4px; }
+    .sub { color: #9ca3af; font-size: 15px; margin-bottom: 16px; }
     .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
              gap: 14px; margin-bottom: 14px; }
     .card { background: #1f2937; border-radius: 12px; padding: 16px;
             box-shadow: 0 1px 3px rgba(0,0,0,.4); }
     .verdict { display: flex; align-items: center; gap: 10px;
-               font-size: 18px; font-weight: 700; margin-bottom: 10px; }
-    .cardtitle { text-align: center; font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+               font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+    .cardtitle { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
     .dot { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; }
     .green .dot { background: #22c55e; } .green .verdict { color: #4ade80; }
     .yellow .dot { background: #eab308; } .yellow .verdict { color: #facc15; }
     .red .dot { background: #ef4444; } .red .verdict { color: #f87171; }
     .nums { display: flex; flex-wrap: wrap; gap: 14px; font-size: 14px;
             margin: 10px 0; }
-    .nums b { font-size: 16px; }
+    .nums b { font-size: 14px; }
     .pnl-pos { color: #4ade80; } .pnl-neg { color: #f87171; }
     .qa { border-top: 1px solid #374151; padding: 8px 0; font-size: 14px; }
     .qa .q { font-weight: 600; }
     .ok { color: #4ade80; } .bad { color: #f87171; } .warn { color: #facc15; }
     .bar { height: 14px; border-radius: 7px; background: #374151;
-           margin: 4px 0 10px; position: relative; overflow: hidden; }
+           margin: 4px 0 10px; position: relative; overflow: hidden;
+           touch-action: none; cursor: ew-resize; }
     .bar > div { height: 100%; border-radius: 7px; }
-    .lbl { font-size: 12px; color: #9ca3af; }
+    .tick50 { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px;
+              background: rgba(248,250,252,.35); }
+    .ordtick { position: absolute; top: 0; bottom: 0; width: 18px;
+               transform: translateX(-50%); cursor: grab; }
+    .ordtick > div { position: absolute; left: 7px; top: 0; bottom: 0; width: 4px;
+                     background: #f59e0b; border-radius: 2px; }
+    .ordrow { display: flex; align-items: center; gap: 10px; margin: 2px 0 10px;
+              font-size: 13px; }
+    .ordbtn { font-size: 12px; background: #1f2937; color: #e5e7eb;
+              border: 1px solid #4b5563; border-radius: 6px; padding: 4px 10px;
+              cursor: pointer; }
+    .lbl { font-size: 14px; color: #9ca3af; }
     .err { color: #f87171; }
-    footer { color: #6b7280; font-size: 12px; margin-top: 8px; }
+    footer { color: #6b7280; font-size: 13px; margin-top: 8px; }
     a { color: #60a5fa; text-decoration: none; }
     form { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
            gap: 10px; align-items: end; }
-    label { font-size: 12px; color: #9ca3af; display: block; }
+    label { font-size: 14px; color: #9ca3af; display: block; }
     input, select { width: 100%; box-sizing: border-box; margin-top: 4px;
            background: #374151; color: #e5e7eb; border: 1px solid #4b5563;
-           border-radius: 8px; padding: 8px; font-size: 14px; }
+           border-radius: 8px; padding: 8px; font-size: 16px; }
     button { background: #22c55e; color: #052e16; font-weight: 700; border: 0;
-             border-radius: 8px; padding: 10px 18px; font-size: 14px; cursor: pointer; }
+             border-radius: 8px; padding: 10px 18px; font-size: 16px; cursor: pointer; }
   </style>
 </head>
 <body>
   <h1>🎯 Options Dashboard</h1>
   <div class="sub">Auto-refreshes every 3 min (<span id="cd">3:00</span>) · quotes ~15 min delayed · {{ now }} · <a href="/log">📒 Trade Log</a></div>
+
   <div class="card">
     <form method="post" action="/log">
       <label>Date<input type="date" name="date" value="{{ today }}" required></label>
@@ -77,21 +90,35 @@
   {% for c in cards %}
   <div class="card {{ c.color if c.color else '' }}">
     {% if c.error %}
-      <div class="verdict">{{ c.label }}</div>
+      <div class="verdict">⚠️ {{ c.label }}</div>
       <div class="err">Couldn't load data: {{ c.error }}</div>
     {% else %}
-      <div class="cardtitle">{{ c.label }} — SHORT {{ c.qty }}x</div>
+      <div class="cardtitle">{{ c.label }} — {{ c.qty }} Sell{{ "s" if c.qty > 1 else "" }}</div>
       <div class="verdict"><span class="dot"></span>{{ c.verdict }}</div>
       <div class="nums">
-        <span>{{ c.symbol }} <b>${{ c.underlying }}</b></span>
-        <span>Mark <b>${{ c.mark }}</b></span>
-        <span>P&amp;L <b class="{{ 'pnl-pos' if c.pnl >= 0 else 'pnl-neg' }}">${{ c.pnl }}</b></span>
-        <span>Sold ${{ c.sold }} → target ${{ c.target }}</span>
-        <span>{{ c.days_left }} days left · IV {{ c.iv }}%</span>
+        <span>{{ c.symbol }}: <b>${{ c.underlying }}</b></span>
+        <span>Mark: <b>${{ c.mark }}</b></span>
+        <span>P&amp;L: <b class="{{ 'pnl-pos' if c.pnl >= 0 else 'pnl-neg' }}">${{ c.pnl }}</b></span>
+      </div>
+      <div class="nums">
+        <span>Sold ${{ c.sold }} → Target ${{ c.target }}</span>
+        <span>{{ c.days_left }} Days left · IV: {{ c.iv }}%</span>
       </div>
       <div class="lbl">🎯 {{ c.profit_pct }}% of max profit (${{ c.pnl }} of ${{ c.max_profit }})</div>
-      <div class="bar">
+      <div class="bar" data-key="{{ c.key }}" data-sold="{{ c.sold }}">
         <div style="width: {{ c.profit_pct }}%; background:#22c55e"></div>
+        <div class="tick50"></div>
+        {% if c.limit_pct is not none %}
+        <div class="ordtick" style="left: {{ c.limit_pct }}%"><div></div></div>
+        {% endif %}
+      </div>
+      <div class="ordrow">
+        {% if c.buy_limit is not none %}
+        <span style="color:#fbbf24">Buy order resting @ ${{ c.buy_limit }}</span>
+        <button class="ordbtn" data-key="{{ c.key }}">Clear</button>
+        {% else %}
+        <span style="color:#9ca3af">No buy order resting — click the bar to mark one</span>
+        {% endif %}
       </div>
       {% for a in c.answers %}
       <div class="qa">
@@ -110,6 +137,60 @@
   {% endif %}
 
   <footer>Educational tool — not financial advice. Data via Yahoo Finance.</footer>
+<script>
+  // Resting buy-order tick: click/drag a card's bar to mark your working RH
+  // buy limit; it saves to limits.json and the page reloads. Clear removes it.
+  document.querySelectorAll('.bar[data-key]').forEach(function (bar) {
+    var key = bar.getAttribute('data-key');
+    var sold = parseFloat(bar.getAttribute('data-sold'));
+    var dragging = false;
+    function priceFromEvent(e) {
+      var r = bar.getBoundingClientRect();
+      var pct = (e.clientX - r.left) / r.width * 100;
+      pct = Math.max(0, Math.min(100, pct));
+      return Math.round(sold * (1 - pct / 100) * 100) / 100;
+    }
+    function moveTick(price) {
+      var pct = Math.max(0, Math.min(100, (sold - price) / sold * 100));
+      var tick = bar.querySelector('.ordtick');
+      if (!tick) {
+        tick = document.createElement('div');
+        tick.className = 'ordtick';
+        tick.innerHTML = '<div></div>';
+        bar.appendChild(tick);
+      }
+      tick.style.left = pct + '%';
+    }
+    function save(price) {
+      fetch('/limit', {method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({key: key, price: price})})
+        .then(function () { location.reload(); });
+    }
+    bar.addEventListener('pointerdown', function (e) {
+      dragging = true;
+      if (bar.setPointerCapture) { try { bar.setPointerCapture(e.pointerId); } catch (err) {} }
+      moveTick(priceFromEvent(e));
+      e.preventDefault();
+    });
+    bar.addEventListener('pointermove', function (e) { if (dragging) moveTick(priceFromEvent(e)); });
+    bar.addEventListener('pointerup', function (e) {
+      if (!dragging) return;
+      dragging = false;
+      save(priceFromEvent(e));
+    });
+    bar.addEventListener('pointercancel', function () { dragging = false; });
+  });
+  document.querySelectorAll('.ordbtn').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      fetch('/limit', {method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({key: btn.getAttribute('data-key'), price: null})})
+        .then(function () { location.reload(); });
+    });
+  });
+</script>
 <script>
   // Countdown to the next auto-refresh (matches the 180s meta refresh).
   var remain = 180;
